@@ -19,9 +19,13 @@ import StringIO
 
 verbose = False
 
+class DieException(Exception):
+    """Raised by die().
+    """
+
 def die(msg):
     if verbose:
-        raise Exception(msg)
+        raise DieException(msg)
     else:
         sys.stderr.write(msg + "\n")
         sys.exit(1)
