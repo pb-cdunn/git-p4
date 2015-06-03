@@ -7,12 +7,13 @@
 #            2007 Trolltech ASA
 # License: MIT <http://www.opensource.org/licenses/mit-license.php>
 #
-
+from contextlib import contextmanager
 import optparse, sys, os, marshal, subprocess, shlex
 import tempfile, os.path, time, platform
 import re
 import cStringIO
 import StringIO
+
 
 #from sets import Set
 
@@ -24,6 +25,17 @@ def die(msg):
     else:
         sys.stderr.write(msg + "\n")
         sys.exit(1)
+
+@contextmanager
+def cd(newdir):
+    prevdir = os.getcwd()
+    if verbose:
+        print "%r\t <- %r" %(newdir, prevdir)
+    os.chdir(os.path.expanduser(newdir))
+    yield
+    if verbose:
+        print " %r\t-> %r" %(newdir, prevdir)
+    os.chdir(prevdir)
 
 class LargeFileWriter:
     """Wrapper for a file, to get around a windows bug when writing large amounts of data.
@@ -324,7 +336,7 @@ def read_pipe_lines(c):
     pipe = os.popen(c, 'rb')
     val = pipe.readlines()
     if pipe.close():
-        die('Command failed: %s' % c)
+        die('Command failed: %s %r' % (c, val))
 
     return val
 
@@ -333,6 +345,21 @@ def system(cmd):
         sys.stderr.write("executing %s\n" % cmd)
     if os.system(cmd) != 0:
         die("command failed: %s" % cmd)
+
+def patternSubmoduleStatus():
+    pattern = re.compile('^(?P<status>.)(?P<sha1>\S+)\s+(?P<path>\S+)')
+    while True:
+        yield pattern
+
+def parseSubmoduleStatusEntry(entry):
+    """Parse a line from 'git submodule status' into its basic elements.
+
+    status: '-', '+', 'U', or ' '
+    sha1: for the submodule
+    path: within this repo
+    """
+    match = patternSubmoduleStatus().next().match(entry)
+    return match.groupdict() if match else None
 
 def diffTreePattern():
     # This is a simple generator for the diff tree regex pattern. This could be
@@ -1037,12 +1064,28 @@ class P4Submit(Command):
         for f in self.editedFiles:
             self.p4.p4_system("edit \"%s\"" % escapeStringP4(f))
 
+    def getSubmodules(self):
+        """Assumed to occur within oldWorkingDirectory.
+        """
+        print os.getcwd()
+        sm = read_pipe_lines("git submodule status")
+        print sm
+        for line in sm:
+            entry = parseSubmoduleStatusEntry(line)
+            yield entry['path']
+
     def getChangedFiles(self, diffOpts, id):
+        with cd(self.oldWorkingDirectory):
+            submodules = list(self.getSubmodules()) # ignore these
         diff = read_pipe_lines("git diff-tree -r %s \"%s^\" \"%s\"" % (diffOpts, id, id))
         for line in diff:
             diff = parseDiffTreeEntry(line)
             modifier = diff['status']
             path = diff['src']
+            if path in submodules:
+                if verbose:
+                    print 'Skipping submodule %r' %path
+                continue
             if modifier == "M":
                 if isModeExecChanged(diff['src_mode'], diff['dst_mode']):
                     self.filesToChangeExecBit[path] = diff['dst_mode']
