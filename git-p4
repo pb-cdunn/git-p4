@@ -1071,10 +1071,13 @@ class P4Submit(Command):
     def getSubmodules(self):
         """Assumed to occur within oldWorkingDirectory.
         """
-        print os.getcwd()
-        sm = read_pipe_lines("git submodule status")
-        print sm
+        cmd = 'git submodule status'
+        sm = read_pipe_lines(cmd)
+        if verbose:
+            print "$ %s" %cmd
         for line in sm:
+            if verbose:
+                print line,
             entry = parseSubmoduleStatusEntry(line)
             yield entry['path']
 
