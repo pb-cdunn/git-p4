@@ -934,6 +934,7 @@ class P4Submit(Command):
         tryPatchCmd = patchcmd + "--check -"
         applyPatchCmd = patchcmd + "--check --apply -"
 
+        log("%r" %tryPatchCmd)
         if os.system(tryPatchCmd) != 0:
             print "Unfortunately applying the change failed!"
             print "What do you want to do?"
@@ -945,6 +946,7 @@ class P4Submit(Command):
                 print "Skipping! Good luck with the next patches..."
                 return False
             elif response == "a":
+                log(applyPatchCmd)
                 os.system(applyPatchCmd)
                 if len(self.filesToAdd) > 0:
                     print "You may also want to call p4 add on the following files:"
@@ -960,6 +962,7 @@ class P4Submit(Command):
                 die("Please resolve and submit the conflict manually and "
                     "continue afterwards with git-p4 submit --continue")
 
+        log(applyPatchCmd)
         system(applyPatchCmd)
         return True
 
