@@ -38,12 +38,10 @@ def log(msg):
 @contextmanager
 def cd(newdir):
     prevdir = os.getcwd()
-    if verbose:
-        print "%r\t <- %r" %(newdir, prevdir)
+    log("%r\t <- %r" %(newdir, prevdir))
     os.chdir(os.path.expanduser(newdir))
     yield
-    if verbose:
-        print " %r\t-> %r" %(newdir, prevdir)
+    log(" %r\t-> %r" %(newdir, prevdir))
     os.chdir(prevdir)
 
 class LargeFileWriter:
@@ -1091,13 +1089,14 @@ class P4Submit(Command):
         with cd(self.oldWorkingDirectory):
             submodules = list(self.getSubmodules()) # ignore these
         diff = read_pipe_lines("git diff-tree -r %s \"%s^\" \"%s\"" % (diffOpts, id, id))
+        log("Changed files/directories (%d):" %len(diff))
         for line in diff:
             diff = parseDiffTreeEntry(line)
             modifier = diff['status']
             path = diff['src']
+            log("%r" %path)
             if path in submodules:
-                if verbose:
-                    print 'Skipping submodule %r' %path
+                log('Skipping submodule %r' %path)
                 continue
             if modifier == "M":
                 if isModeExecChanged(diff['src_mode'], diff['dst_mode']):
