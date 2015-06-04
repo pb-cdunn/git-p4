@@ -972,8 +972,8 @@ class P4Submit(Command):
             self.filesToChangeExecBit[dest] = diff['dst_mode']
         return dest
 
-    def submitCommit(self, submitTemplate):
-        return self.p4.p4_read_write_pipe("-G submit -i", submitTemplate)
+    def submitCommit(self, submitTemplate, perm=True):
+        return self.p4.p4_read_write_pipe("-G submit -i", submitTemplate, perm=perm)
 
     def revertCommit(self):
         for f in self.editedFiles:
@@ -992,7 +992,7 @@ class P4Submit(Command):
         print ("Perforce submit template written as %s. Please review/edit and then use p4 submit -i < %s to submit directly!"
                % (fileName, fileName))
 
-    def submit(self, template, logMessage,  diff):
+    def submit(self, template, logMessage,  diff, perm=True):
         # submit files to p4. Return changelist number, or 0 if not submitted
         changelist = 0
         chdir(self.clientPath)
@@ -1040,15 +1040,19 @@ class P4Submit(Command):
             tmpFile.write(submitTemplate)
             tmpFile.flush()
 
-            cmd = "cat %s | %s" % (tmpFile.name, self.p4.p4_build_cmd("submit -i"))
+            cmd = "cat %s | %s" % (tmpFile.name, self.p4.p4_build_cmd("submit -i", perm=perm))
             popen = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
             output = popen.communicate()[0]
             tmpFile.close
             if popen.returncode:
-                die('Command failed: %s' % cmd)
-            match = re.search("Change ([0-9]+) submitted", output)
-            if match:
-                changelist = match.group(1)
+                die('Command failed: %r' % cmd)
+            if dry_run:
+                log('dry-run skipped: %r' % cmd)
+                changeList = ''
+            else:
+                match = re.search("Change ([0-9]+) submitted", output)
+                if match:
+                    changelist = match.group(1)
         else:
             self.revertCommit()
 
@@ -1171,7 +1175,7 @@ class P4Submit(Command):
         #perforce's diff -du ... breaks if one of the files has been deleted. This is a p4 bug not a git-p4 bug
         diff = "\n".join( read_pipe_lines("git diff \"%s^\" \"%s\"" % (id, id)) )
         template = self.prepareSubmitTemplate()
-        changelist = self.submit(template, logMessage, diff)
+        changelist = self.submit(template, logMessage, diff, perm=True)
         
         # Add note
         if changelist > 0:
@@ -2763,7 +2767,7 @@ class P4Shelve(P4Submit):
 
         diff = "\n".join( read_pipe_lines("git diff \"%s\" \"%s\"" % (firstCommit, lastCommit)) )
         template = self.prepareSubmitTemplate(self.clnumber)
-        self.submit(template, logMessage, diff)
+        self.submit(template, logMessage, diff, perm=False) # shelving is ok for dry_run mode
 
     def sync(self, settings):
         change = settings["change"]
@@ -2835,7 +2839,8 @@ def main():
     global dry_run
     if len(options) > 0:
         options.append(optparse.make_option("--git-dir", dest="gitdir"))
-        options.append(optparse.make_option("--dry-run", "-n", action="store_true"))
+        options.append(optparse.make_option("--dry-run", "-n", action="store_true",
+            help="Skip the 'submit' step. This is just a debugging aid. git-p4 might crash after 'submit', and you might have to 'revert' before running for-real."))
 
         cmd.dry_run = dry_run # to work around a problem with argparse
         parser = optparse.OptionParser(cmd.usage.replace("%prog", "%prog " + cmdName),
