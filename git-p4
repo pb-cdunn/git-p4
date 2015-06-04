@@ -75,7 +75,7 @@ class P4Helper:
     """ Encapsulates P4 methods so that they can be replaced for testing purposes
     """
     
-    def p4_build_cmd(self, cmd):
+    def p4_build_cmd(self, cmd, perm=False):
         """Build a suitable p4 command line.
 
         This consolidates building and returning a p4 command line into one
@@ -105,17 +105,17 @@ class P4Helper:
             real_cmd += "-c %s " % client
 
         real_cmd += "-d \"%s\" %s" % (os.getcwd(), cmd)
-        if dry_run:
+        if dry_run and perm:
             real_cmd = "echo " + real_cmd
         log(real_cmd)
         return real_cmd
 
-    def p4_write_pipe(self, c, str):
-        real_cmd = self.p4_build_cmd(c)
+    def p4_write_pipe(self, c, str, perm=False):
+        real_cmd = self.p4_build_cmd(c, perm=perm)
         return write_pipe(real_cmd, str)
         
-    def p4_read_write_pipe(self, c, str, ignore_error=False):
-        real_cmd = self.p4_build_cmd(c)
+    def p4_read_write_pipe(self, c, str, ignore_error=False, perm=False):
+        real_cmd = self.p4_build_cmd(c, perm=perm)
         return read_write_pipe(real_cmd, str,  ignore_error)
 
     def isP4Exec(self, kind):
@@ -126,18 +126,18 @@ class P4Helper:
         a plus sign, it is also executable"""
         return (re.search(r"(^[cku]?x)|\+.*x", kind) != None)
 
-    def p4_read_pipe(self, c, ignore_error=False):
-        real_cmd = self.p4_build_cmd(c)
+    def p4_read_pipe(self, c, ignore_error=False, perm=False):
+        real_cmd = self.p4_build_cmd(c, perm=perm)
         return read_pipe(real_cmd, ignore_error)
 
-    def p4_read_pipe_lines(self, c):
+    def p4_read_pipe_lines(self, c, perm=False):
         """Specifically invoke p4 on the command supplied. """
-        real_cmd = self.p4_build_cmd(c)
+        real_cmd = self.p4_build_cmd(c, perm=perm)
         return read_pipe_lines(real_cmd)
 
-    def p4_system(self, cmd):
+    def p4_system(self, cmd, perm=False):
         """Specifically invoke p4 as the system command. """
-        real_cmd = self.p4_build_cmd(cmd)
+        real_cmd = self.p4_build_cmd(cmd, perm=perm)
         return system(real_cmd)
 
     def setP4ExecBit(self, file, mode):
@@ -164,8 +164,8 @@ class P4Helper:
         else:
             die("Could not determine file type for %s (result: '%s')" % (file, result))
 
-    def p4CmdListOpen(self, cmd, stdin=None, stdin_mode='w+b'):
-        cmd = self.p4_build_cmd("-G %s" % (cmd))
+    def p4CmdListOpen(self, cmd, stdin=None, stdin_mode='w+b', perm=False):
+        cmd = self.p4_build_cmd("-G %s" % (cmd), perm=perm)
         if verbose:
             sys.stderr.write("Opening pipe: %s\n" % cmd)
 
@@ -183,9 +183,9 @@ class P4Helper:
                               stdin=stdin_file,
                               stdout=subprocess.PIPE)
 
-    def p4CmdList(self, cmd, stdin=None, stdin_mode='w+b'):
+    def p4CmdList(self, cmd, stdin=None, stdin_mode='w+b', perm=False):
 
-        p4 = self.p4CmdListOpen(cmd, stdin, stdin_mode)    
+        p4 = self.p4CmdListOpen(cmd, stdin, stdin_mode, perm=perm)
         result = []
         try:
             while True:
@@ -201,8 +201,8 @@ class P4Helper:
 
         return result
 
-    def p4Cmd(self, cmd):
-        cmdList = self.p4CmdList(cmd)
+    def p4Cmd(self, cmd, perm=False):
+        cmdList = self.p4CmdList(cmd, perm=perm)
         result = {}
         for entry in cmdList:
             result.update(entry)
