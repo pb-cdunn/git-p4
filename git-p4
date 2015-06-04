@@ -1075,7 +1075,7 @@ class P4Submit(Command):
         for f in self.editedFiles:
             self.p4.p4_system("edit \"%s\"" % escapeStringP4(f))
 
-    def getSubmodules(self):
+    def _getSubmodules(self):
         """Assumed to occur within oldWorkingDirectory.
         """
         cmd = 'git submodule status'
@@ -1088,6 +1088,29 @@ class P4Submit(Command):
             entry = parseSubmoduleStatusEntry(line)
             yield entry['path']
 
+    def parse_gitmodules(self):
+        """Look for .gitmodules in CWD.
+        """
+        fn = '.gitmodules'
+        if not os.path.exists(fn):
+            return
+        import ConfigParser, StringIO, re
+        content = open(fn).read()
+        stripped = re.sub(r'^\s*', '', content, flags=re.MULTILINE)
+        fp = StringIO.StringIO(stripped)
+        cfg = ConfigParser.RawConfigParser()
+        cfg.readfp(fp)
+        for section in cfg.sections():
+            if not section.startswith('submodule'):
+                log("Unexpected section in %r: %r" %(fn, section))
+                continue
+            sm_name = re.search(r'"([^"]*)"', section).group(1)
+            entries = dict(cfg.items(section))
+            path = entries['path']
+            log("Found submodule path %r" %path)
+            yield path
+    def getSubmodules(self):
+        return list(self.parse_gitmodules())
     def getChangedFiles(self, diffOpts, id):
         with cd(self.oldWorkingDirectory):
             submodules = list(self.getSubmodules()) # ignore these
